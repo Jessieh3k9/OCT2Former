@@ -33,7 +33,9 @@ def build_model(args):
                 num_heads=[2, 4, 4, 8, 16], mlp_ratios=[4, 4, 4, 4, 4],
                 depths=args.depths, aux=args.aux, spec_inter=args.spec_interpolation)
     if args.network == "swinunet":
-        return SwinTransformerSys(img_size=304, patch_size=4, in_chans=args.in_channel, num_classes=args.n_class)
+        crop_h, crop_w = args.crop_size
+        swin_img_size = ((max(crop_h, crop_w) + 223) // 224) * 224
+        return SwinTransformerSys(img_size=swin_img_size, patch_size=4, in_chans=args.in_channel, num_classes=args.n_class)
     if args.network == "TransUNet":
         return get_transNet(args.n_class)
     raise ValueError(f"Unsupported network: {args.network}")
@@ -353,8 +355,6 @@ if __name__ == "__main__":
                 all_sen += Sensitivity
                 all_spe += Specificity
             utils.save_print_score(all_dice, all_iou, all_acc, all_sen, all_spe, args.test_result_file, args.label_names)
-
-
 
 
 

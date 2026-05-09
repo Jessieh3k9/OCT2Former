@@ -595,6 +595,7 @@ class SwinTransformerSys(nn.Module):
         self.num_features_up = int(embed_dim * 2)
         self.mlp_ratio = mlp_ratio
         self.final_upsample = final_upsample
+        self.img_size = to_2tuple(img_size)
 
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
@@ -730,12 +731,18 @@ class SwinTransformerSys(nn.Module):
 
     def forward(self, x):
         size = x.size()[2:]
-        x = F.interpolate(x, size=(304, 304))
+        target_h, target_w = self.img_size
+        pad_h = max(target_h - size[0], 0)
+        pad_w = max(target_w - size[1], 0)
+        if size[0] > target_h or size[1] > target_w:
+            raise ValueError(f"Input size {size} exceeds configured SwinUNet img_size {self.img_size}")
+        if pad_h > 0 or pad_w > 0:
+            x = F.pad(x, (0, pad_w, 0, pad_h))
         x, x_downsample = self.forward_features(x)
         x = self.forward_up_features(x,x_downsample)
         x = self.up_x4(x)
         output = dict()
-        x = F.interpolate(x, size=size)
+        x = x[:, :, :size[0], :size[1]]
         output["main_out"] = x
         return output
 
