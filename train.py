@@ -20,16 +20,34 @@ import torchsummary
 from torchvision.utils import save_image, make_grid
 from DNN_printer import DNN_printer
 from model.OCT2Former import OCT2Former
+from model.swinunet import SwinTransformerSys
+from model.TransUNet.TransUNet import get_transNet
 import sys
 
 sys.setrecursionlimit(100000)
 
+def build_model(args):
+    if args.network == "OCT2Former":
+        return OCT2Former(in_chans=args.in_channel, num_classes=args.n_class,
+                embed_dims=args.vit_dims, k=args.token_dim,
+                num_heads=[2, 4, 4, 8, 16], mlp_ratios=[4, 4, 4, 4, 4],
+                depths=args.depths, aux=args.aux, spec_inter=args.spec_interpolation)
+    if args.network == "swinunet":
+        return SwinTransformerSys(img_size=304, patch_size=4, in_chans=args.in_channel, num_classes=args.n_class)
+    if args.network == "TransUNet":
+        return get_transNet(args.n_class)
+    raise ValueError(f"Unsupported network: {args.network}")
+
+
+def normalize_outputs(outputs):
+    if isinstance(outputs, dict):
+        return outputs
+    return {"main_out": outputs}
+
+
 def main(args, num_fold=0):
     torch.set_num_threads(1)
-    model = OCT2Former(in_chans=args.in_channel, num_classes=args.n_class,
-            embed_dims=args.vit_dims, k=args.token_dim,
-            num_heads=[2, 4, 4, 8, 16], mlp_ratios=[4, 4, 4, 4, 4], 
-            depths=args.depths, aux=args.aux, spec_inter=args.spec_interpolation)
+    model = build_model(args)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -42,7 +60,6 @@ def main(args, num_fold=0):
 
     else:
         raise NotImplementedError
-
 
 
 
@@ -85,7 +102,7 @@ def train(model, device, args, num_fold=0):
 
                 opt.zero_grad()
                 
-                outputs = model(image)
+                outputs = normalize_outputs(model(image))
                 main_out = outputs["main_out"]
 
                 diceloss = criterion_dice(main_out, label)
@@ -147,7 +164,7 @@ def val(model, dataloader, num_train_val,  device, args):
                 assert len(label.size()) == 3
                 image = image.to(device, dtype=torch.float32)
                 label = label.to(device, dtype=torch.long)
-                outputs = model(image)
+                outputs = normalize_outputs(model(image))
                 main_out = outputs["main_out"]
                 main_out = torch.exp(main_out).max(dim=1)[1] 
 
@@ -213,13 +230,13 @@ def test(model, device, args, num_fold=0):
                 image = image.to(device, dtype=torch.float32)
                 label = label.to(device, dtype=torch.long)
 
-                outputs = model(image)
+                outputs = normalize_outputs(model(image))
                 pred = outputs["main_out"]
 
                 if args.tt_aug:
                     for i, axis in enumerate([[2], [3], [2, 3]]):
                         image_tmp = torch.flip(image, dims=axis)
-                        pred_tmp = model(image_tmp)["main_out"]
+                        pred_tmp = normalize_outputs(model(image_tmp))["main_out"]
                         pred_tmp = torch.flip(pred_tmp, dims=axis)
                         pred += pred_tmp
                     pred = pred / 4
