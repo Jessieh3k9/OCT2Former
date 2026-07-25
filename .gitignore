@@ -1,0 +1,6 @@
+# dataset
+/OCTA_3M
+/OCTA_6M
+
+*.pyc
+/runs

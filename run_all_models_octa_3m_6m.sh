@@ -7,7 +7,8 @@ NUM_EPOCHS_6M="${NUM_EPOCHS_6M:-100}"
 BATCH_SIZE="${BATCH_SIZE:-2}"
 LR="${LR:-5e-4}"
 
-models=("TransUNet" "swinunet" "OCT2Former")
+# models=("swinunet")
+models=("OCT2Former")
 
 for model in "${models[@]}"; do
   echo "==================== ${model} on OCTA-3M ===================="
@@ -18,7 +19,7 @@ for model in "${models[@]}"; do
     --dataset_file_list='utils/OCTA_3M.csv' \
     --data_root='OCTA_3M/Projection Maps/OCTA(ILM_OPL)' \
     --data_root_aux='OCTA_3M/Projection Maps/OCT(ILM_OPL)' \
-    --target_root='OCTA_3M/GroundTruth' \
+    --target_root='OCTA_3M/GT_LargeVessel' \
     --run_dir='3M' \
     --in_channel=2 \
     --batch_size="${BATCH_SIZE}" \
@@ -35,7 +36,7 @@ for model in "${models[@]}"; do
     --dataset_file_list='utils/OCTA_6M.csv' \
     --data_root='OCTA_6M/Projection Maps/OCTA(ILM_OPL)' \
     --data_root_aux='OCTA_6M/Projection Maps/OCT(ILM_OPL)' \
-    --target_root='OCTA_6M/GroundTruth' \
+    --target_root='OCTA_6M/GT_LargeVessel' \
     --run_dir='6M' \
     --in_channel=2 \
     --batch_size="${BATCH_SIZE}" \
