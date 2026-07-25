@@ -47,6 +47,20 @@ def normalize_outputs(outputs):
     return {"main_out": outputs}
 
 
+def format_duration(seconds):
+    if seconds is None:
+        return "--:--:--"
+
+    total_seconds = max(int(seconds), 0)
+    days, remainder = divmod(total_seconds, 24 * 60 * 60)
+    hours, remainder = divmod(remainder, 60 * 60)
+    minutes, secs = divmod(remainder, 60)
+
+    if days > 0:
+        return f"{days}d {hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
 def main(args, num_fold=0):
     torch.set_num_threads(1)
     model = build_model(args)
@@ -87,6 +101,37 @@ def train(model, device, args, num_fold=0):
     cp_manager = utils.save_checkpoint_manager(5) 
     step = 0
 
+    batches_per_epoch = len(dataloader_train)
+    total_train_batches = args.num_epochs * batches_per_epoch
+    completed_train_batches = 0
+    training_start_time = time.time()
+    validation_durations = []
+    total_validation_runs = sum(
+        1 for epoch_index in range(args.num_epochs)
+        if (epoch_index + 1) % args.val_step == 0
+    )
+
+    def estimate_total_remaining_time():
+        if completed_train_batches == 0:
+            return None
+
+        elapsed_wall_time = time.time() - training_start_time
+        observed_validation_time = sum(validation_durations)
+        observed_train_time = max(elapsed_wall_time - observed_validation_time, 0.0)
+        average_train_batch_time = observed_train_time / completed_train_batches
+        remaining_train_batches = total_train_batches - completed_train_batches
+
+        average_validation_time = (
+            observed_validation_time / len(validation_durations)
+            if validation_durations else 0.0
+        )
+        remaining_validation_runs = total_validation_runs - len(validation_durations)
+
+        return (
+            average_train_batch_time * remaining_train_batches
+            + average_validation_time * remaining_validation_runs
+        )
+
     for epoch in range(args.num_epochs):
         model.train()
         lr = utils.poly_learning_rate(args, opt, epoch) 
@@ -122,17 +167,27 @@ def train(model, device, args, num_fold=0):
                 totall_loss.backward()
                 opt.step()
 
+                completed_train_batches += 1
+                total_eta_seconds = estimate_total_remaining_time()
+                total_progress = 100.0 * completed_train_batches / total_train_batches
+
                 if step % 5 == 0:
                     if args.aux:
                         writer.add_scalar("Train/aux_losses",aux_losses, step)
                     writer.add_scalar("Train/Totall_loss", totall_loss.item(), step)
                     writer.add_scalar("Train/lr", lr, step)
 
-                pbar.set_postfix(**{'loss': totall_loss.item()})  
+                pbar.set_postfix(**{
+                    'loss': f'{totall_loss.item():.4f}',
+                    'total_progress': f'{total_progress:.1f}%',
+                    'total_eta': format_duration(total_eta_seconds),
+                })
                 pbar.update(args.batch_size)
                 
         if (epoch+1) % args.val_step == 0:
+            validation_start_time = time.time()
             mDice, mIoU, mAcc, mSensitivity, mSpecificity, mAuc, mBACC = val(model, dataloader_val, num_train_val, device, args)
+            validation_durations.append(time.time() - validation_start_time)
             writer.add_scalar("Valid/Dice_val", mDice, step)
             writer.add_scalar("Valid/IoU_val", mIoU, step)
             writer.add_scalar("Valid/Acc_val", mAcc, step)
@@ -145,6 +200,14 @@ def train(model, device, args, num_fold=0):
                 w = csv.writer(f)
                 w.writerow(val_result)
             cp_manager.save(model, opt, os.path.join(args.checkpoint_dir[num_fold], f'CP_epoch{epoch + 1}.pth'), float(mDice))
+
+            total_eta_seconds = estimate_total_remaining_time()
+            elapsed_training_time = time.time() - training_start_time
+            print(
+                f'[Overall] Epoch {epoch + 1}/{args.num_epochs}, '
+                f'elapsed={format_duration(elapsed_training_time)}, '
+                f'total_eta={format_duration(total_eta_seconds)}'
+            )
 
 
 def val(model, dataloader, num_train_val,  device, args):
