@@ -289,14 +289,16 @@ def test(model, device, args, num_fold=0):
 
 if __name__ == "__main__":
 
-    seed = 12345
+    seed = int(os.environ.get("TRAIN_SEED", "12345"))
+    print(f"Using random seed: {seed}")
     random.seed(seed)
     np.random.seed(seed)
-    torch.manual_seed(seed)####
+    torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.cuda.empty_cache()
-    cudnn.benchmark = True
+    cudnn.deterministic = True
+    cudnn.benchmark = False
 
     args = basic_setting()
     assert args.k_fold != 1
