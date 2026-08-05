@@ -98,7 +98,7 @@ def train(model, device, args, num_fold=0):
     criterion = nn.CrossEntropyLoss(torch.tensor(args.class_weight, device=device))
     criterion_dice = DiceLoss()
 
-    cp_manager = utils.save_checkpoint_manager(5) 
+    cp_manager = utils.save_checkpoint_manager(1)
     step = 0
 
     batches_per_epoch = len(dataloader_train)
