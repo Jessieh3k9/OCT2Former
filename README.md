@@ -51,6 +51,19 @@ The official code of OCT2Former: A retinal OCT-angiography vessel segmentation t
  > sh trainROSE.sh
 
 
+### FOR ROSSA dataset
+> python train.py --dataset='ROSSA' \
+ --num_epochs=100 \
+ --data_root='/data/OCTA-FRNet-main/dataset/ROSSA' \
+ --run_dir='ROSSA' \
+ --in_channel=1 \
+ --batch_size=2 \
+ --lr=5e-4 \
+ --img_aug
+
+The ROSSA loader automatically combines `train_manual` and `train_sam` for training, and uses `val` and `test` for evaluation.
+
+
 ### FOR OCTA-3M dataset
  > python train.py  
  --dataset='OCTA-3M' \

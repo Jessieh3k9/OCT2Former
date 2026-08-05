@@ -186,16 +186,17 @@ def train(model, device, args, num_fold=0):
                 
         if (epoch+1) % args.val_step == 0:
             validation_start_time = time.time()
-            mDice, mIoU, mAcc, mSensitivity, mSpecificity, mAuc, mBACC = val(model, dataloader_val, num_train_val, device, args)
+            mDice, mIoU, mAcc, mSensitivity, mSpecificity, mPrecision, mAuc, mBACC = val(model, dataloader_val, num_train_val, device, args)
             validation_durations.append(time.time() - validation_start_time)
             writer.add_scalar("Valid/Dice_val", mDice, step)
             writer.add_scalar("Valid/IoU_val", mIoU, step)
             writer.add_scalar("Valid/Acc_val", mAcc, step)
+            writer.add_scalar("Valid/Precision_val", mPrecision, step)
             writer.add_scalar("Valid/Auc_val", mAuc, step)
             writer.add_scalar("Valid/Sen_val", mSensitivity, step)
             writer.add_scalar("Valid/Spe_val", mSpecificity, step)
             writer.add_scalar("Valid/bacc_val", mBACC, step)
-            val_result = [num_fold, epoch+1, mDice, mIoU, mAcc, mAuc, mSensitivity, mSpecificity, mBACC]
+            val_result = [num_fold, epoch+1, mDice, mIoU, mAcc, mPrecision, mAuc, mSensitivity, mSpecificity, mBACC]
             with open(args.val_result_file, "a") as f:
                 w = csv.writer(f)
                 w.writerow(val_result)
@@ -214,6 +215,7 @@ def val(model, dataloader, num_train_val,  device, args):
     all_dice = []
     all_iou = []
     all_acc = []
+    all_precision = []
     all_auc = []
     all_sen = []
     all_spe = []
@@ -236,11 +238,12 @@ def val(model, dataloader, num_train_val,  device, args):
                 for b in range(image.size()[0]):
                     file_name, _ = os.path.splitext(file[b])
                     hist = utils.fast_hist(label[b, :, :], main_out[b, :, :], args.n_class)
-                    dice, iou, acc, Sensitivity, Specificity, BACC = utils.cal_scores(hist.cpu().numpy())
+                    dice, iou, acc, Precision, Sensitivity, Specificity, BACC = utils.cal_scores(hist.cpu().numpy())
                     auc = utils.calc_auc(main_out[b, :, :], label[b, :, :])
                     all_dice.append(list(dice))
                     all_iou.append(list(iou))
                     all_acc.append([acc])
+                    all_precision.append([Precision] if np.isscalar(Precision) else list(Precision))
                     all_auc.append([auc])
                     all_sen.append(list(Sensitivity))
                     all_spe.append(list(Specificity))
@@ -249,14 +252,15 @@ def val(model, dataloader, num_train_val,  device, args):
     mDice = np.array(all_dice).mean()
     mIoU = np.array(all_iou).mean()
     mAcc = np.array(all_acc).mean()
+    mPrecision = np.array(all_precision).mean()
     mAuc = np.array(all_auc).mean()
     mSensitivity = np.array(all_sen).mean()
     mSpecificity = np.array(all_spe).mean()
     mBACC = np.array(all_bacc).mean()
     
-    print(f'\r   [VAL] mDice:{mDice:0.2f}, mIoU:{mIoU:0.2f}, mAcc:{mAcc:0.2f}, mAuc:{mAuc:0.2f},  mSen:{mSensitivity:0.2f}, mSpec:{mSpecificity:0.2f}, mBACC:{mBACC:0.2f}')
+    print(f'\r   [VAL] mDice:{mDice:0.2f}, mIoU:{mIoU:0.2f}, mAcc:{mAcc:0.2f}, mPrecision:{mPrecision:0.2f}, mAuc:{mAuc:0.2f},  mSen:{mSensitivity:0.2f}, mSpec:{mSpecificity:0.2f}, mBACC:{mBACC:0.2f}')
 
-    return mDice, mIoU, mAcc, mSensitivity, mSpecificity, mAuc, mBACC
+    return mDice, mIoU, mAcc, mSensitivity, mSpecificity, mPrecision, mAuc, mBACC
 
 
 
@@ -279,6 +283,7 @@ def test(model, device, args, num_fold=0):
     all_dice = []
     all_iou = []
     all_acc = []
+    all_precision = []
     all_auc = []
     all_sen = []
     all_spe = []
@@ -310,10 +315,10 @@ def test(model, device, args, num_fold=0):
 
                 for b in range(image.size()[0]):
                     hist = utils.fast_hist(label[b,:,:], pred[b,:,:], args.n_class)
-                    dice, iou, acc, Sensitivity, Specificity, bacc = utils.cal_scores(hist.cpu().numpy(), smooth=0.01)
+                    dice, iou, acc, Precision, Sensitivity, Specificity, bacc = utils.cal_scores(hist.cpu().numpy(), smooth=0.01)
                     auc = utils.calc_auc(pred[b, :, :], label[b, :, :])
 
-                    test_result = [file[b], dice.mean()]+list(dice)+[iou.mean()]+list(iou)+[acc] + \
+                    test_result = [file[b], dice.mean()]+list(dice)+[iou.mean()]+list(iou)+[acc] + [Precision.mean()] + [auc] + \
                         [Sensitivity.mean()]+list(Sensitivity)+[Specificity.mean()]+list(Specificity)+ \
                         [bacc.mean()]+list(bacc)
                     with open(args.test_result_file, "a") as f:
@@ -323,6 +328,7 @@ def test(model, device, args, num_fold=0):
                     all_dice.append(list(dice))
                     all_iou.append(list(iou))
                     all_acc.append([acc])
+                    all_precision.append([Precision.mean()])
                     all_auc.append([auc])
                     all_sen.append(list(Sensitivity))
                     all_spe.append(list(Specificity))
@@ -337,16 +343,17 @@ def test(model, device, args, num_fold=0):
     print(f'mDice: {np.array(all_dice).mean()}')
     print(f'mIoU:  {np.array(all_iou).mean()}')
     print(f'mAcc:  {np.array(all_acc).mean()}')
+    print(f'mPrecision: {np.array(all_precision).mean()}')
     print(f'mAuc:  {np.array(all_auc).mean()}')
     print(f'mSens: {np.array(all_sen).mean()}')
     print(f'mSpec: {np.array(all_spe).mean()}')
     print(f'mBACC: {np.array(all_bacc).mean()}')
 
     if num_fold == 0:
-        utils.save_print_score(all_dice, all_iou, all_acc, all_auc, all_sen, all_spe, all_bacc, args.test_result_file, args.label_names)
+        utils.save_print_score(all_dice, all_iou, all_acc, all_precision, all_auc, all_sen, all_spe, all_bacc, args.test_result_file, args.label_names)
         return
 
-    return all_dice, all_iou, all_acc, all_auc, all_sen, all_spe, all_bacc
+    return all_dice, all_iou, all_acc, all_precision, all_auc, all_sen, all_spe, all_bacc
 
 
 
@@ -376,6 +383,8 @@ if __name__ == "__main__":
         from dataset.dataset_6M import *
     elif args.dataset == 'ROSE':
         from dataset.dataset_ROSE import *
+    elif args.dataset == 'ROSSA':
+        from dataset.dataset_ROSSA import *
     elif args.dataset == 'OCTA-SS':
         from dataset.dataset_SS import *
     else:
@@ -410,16 +419,18 @@ if __name__ == "__main__":
             all_dice = []
             all_iou = []
             all_acc = []
+            all_precision = []
             all_sen = []
             all_spe = []
             for i in range(args.start_fold, args.end_fold):
-                Dice, IoU, Acc, Sensitivity, Specificity = main(args, num_fold=i + 1)
+                Dice, IoU, Acc, Precision, Sensitivity, Specificity = main(args, num_fold=i + 1)
                 all_dice += Dice
                 all_iou += IoU
                 all_acc += Acc
+                all_precision += Precision
                 all_sen += Sensitivity
                 all_spe += Specificity
-            utils.save_print_score(all_dice, all_iou, all_acc, all_sen, all_spe, args.test_result_file, args.label_names)
+            utils.save_print_score(all_dice, all_iou, all_acc, all_precision, [], all_sen, all_spe, [], args.test_result_file, args.label_names)
 
 
 

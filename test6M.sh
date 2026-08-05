@@ -1,0 +1,14 @@
+TRAIN_SEED=387581 python train.py \
+  --mode=test \
+  --dataset=OCTA-6M \
+  --network=OCT2Former \
+  --num_epochs=100 \
+  --dataset_file_list=utils/OCTA_6M.csv \
+  --data_root='OCTA_6M/ProjectionMaps/OCTA(ILM_OPL)' \
+  --data_root_aux='OCTA_6M/ProjectionMaps/OCT(ILM_OPL)' \
+  --target_root='OCTA_6M/GT_LargeVessel' \
+  --run_dir=6M \
+  --test_run_file='2026-0726-1701_02_OCT2Former_100epoch_OCT2Former_OCTA6M_trial2_seed387581_fold_None' \
+  --in_channel=2 \
+  --batch_size=2 \
+  --cuda_id=0

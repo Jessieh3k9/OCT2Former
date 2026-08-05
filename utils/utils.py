@@ -38,18 +38,20 @@ def fast_hist(label_true, label_pred, n_class, ROSE=False):
 def cal_scores(hist, smooth=0.001):
     if len(hist) == 4:
         FP, FN, TP, TN = hist
+        accuracy = (TP + TN) / (TP + FP + FN + TN)
+        precision = TP / (TP + FP + smooth)
     else:
         TP = np.diag(hist)
         FP = hist.sum(axis=0) - TP
         FN = hist.sum(axis=1) - TP
         TN = hist.sum() - TP - FP - FN
+        accuracy = np.diag(hist).sum() / hist.sum()
+        precision = TP / (TP + FP + smooth)
     union = TP + FP + FN
 
     dice = (2*TP+smooth) / (union+TP+smooth)
 
     iou = (TP+smooth) / (union+smooth)
-
-    # Precision = np.diag(hist).sum() / hist.sum()   # 分类正确的准确率  acc
 
     Sensitivity = (TP+smooth) / (TP+FN+smooth)  # recall/TPR
 
@@ -59,9 +61,9 @@ def cal_scores(hist, smooth=0.001):
     BACC = (Sensitivity+Specificity)/2
     # print(dice, iou)
     if len(hist) == 4:
-        return dice*100, iou*100,  Sensitivity*100, Sensitivity*100, Specificity*100, BACC*100
+        return dice*100, iou*100, accuracy*100, precision*100, Sensitivity*100, Specificity*100, BACC*100
 
-    return dice[1:]*100, iou[1:]*100,  Sensitivity[1:]*100, Sensitivity[1:]*100, Specificity[1:]*100, BACC[1:]*100
+    return dice[1:]*100, iou[1:]*100, accuracy*100, precision[1:]*100, Sensitivity[1:]*100, Specificity[1:]*100, BACC[1:]*100
 
 def numeric_score(pred_arr, gt_arr, kernel_size=(3, 3)):  # DCC & ROSE-2: kernel_size=(3, 3)
     """Computation of statistical numerical scores:
@@ -90,10 +92,10 @@ def numeric_score(pred_arr, gt_arr, kernel_size=(3, 3)):  # DCC & ROSE-2: kernel
     # cv2.imwrite(r'/data1/tanxiao/Segmentation-master/runs/ROSE2/dilated.png', dilated_gt_arr)
     # cv2.imwrite(r'/data1/tanxiao/Segmentation-master/runs/ROSE2/pre.png', pred_arr)
     # cv2.imwrite(r'/data1/tanxiao/Segmentation-master/runs/ROSE2/gt.png', gt_arr)
-    FP = np.float(np.sum(np.logical_and(pred_arr == 1, dilated_gt_arr == 0)))
-    FN = np.float(np.sum(np.logical_and(pred_arr == 0, gt_arr == 1)))
-    TP = np.float(np.sum(np.logical_and(pred_arr == 1, dilated_gt_arr == 1)))
-    TN = np.float(np.sum(np.logical_and(pred_arr == 0, gt_arr == 0)))
+    FP = float(np.sum(np.logical_and(pred_arr == 1, dilated_gt_arr == 0)))
+    FN = float(np.sum(np.logical_and(pred_arr == 0, gt_arr == 1)))
+    TP = float(np.sum(np.logical_and(pred_arr == 1, dilated_gt_arr == 1)))
+    TN = float(np.sum(np.logical_and(pred_arr == 0, gt_arr == 0)))
     
     return FP, FN, TP, TN
 
@@ -127,32 +129,33 @@ def calc_auc(pred_arr, gt_arr, mask_arr=None):
 
 
 # 保存打印指标
-def save_print_score(all_dice, all_iou, all_acc, all_auc, all_sen, all_spe, all_bacc, file, label_names):
+def save_print_score(all_dice, all_iou, all_acc, all_precision, all_auc, all_sen, all_spe, all_bacc, file, label_names):
     all_dice = np.array(all_dice)
     all_iou = np.array(all_iou)
     all_acc = np.array(all_acc)
+    all_precision = np.array(all_precision)
     all_auc = np.array(all_auc)
     all_sen = np.array(all_sen)
     all_spe = np.array(all_spe)
     all_bacc = np.array(all_bacc)
     test_mean = ["mean"]+[all_dice.mean()] + list(all_dice.mean(axis=0)) + \
                 [all_iou.mean()] + list(all_iou.mean(axis=0)) + \
-                [all_acc.mean()] + \
+                [all_acc.mean()] + [all_precision.mean()] + \
                 [all_auc.mean()] + \
                 [all_sen.mean()] + list(all_sen.mean(axis=0)) + \
                 [all_spe.mean()] + list(all_spe.mean(axis=0)) + \
                 [all_bacc.mean()] + list(all_bacc.mean(axis=0)) 
     test_std = ["std"]+[all_dice.std()] + list(all_dice.std(axis=0)) + \
                [all_iou.std()] + list(all_iou.std(axis=0)) + \
-               [all_acc.std()] + \
+               [all_acc.std()] + [all_precision.std()] + \
                [all_auc.std()] + \
                [all_sen.std()] + list(all_sen.std(axis=0)) + \
                [all_spe.std()] + list(all_spe.std(axis=0)) + \
                [all_bacc.std()] + list(all_bacc.std(axis=0))
-    label_names = label_names[1:]
+    label_names = label_names[1:] or [f"class_{index}" for index in range(1, all_dice.shape[1] + 1)]
     title = [' ', 'mDice'] + [name + "_dice" for name in label_names] + \
             ['mIoU'] + [name + "_iou" for name in label_names] + \
-            ['mAcc'] + \
+            ['mAcc'] + ['mPrecision'] + \
             ['mAuc'] + \
             ['mSens'] + [name + "_sen" for name in label_names] + \
             ['mSpec'] + [name + "_spe" for name in label_names] + \
@@ -168,6 +171,7 @@ def save_print_score(all_dice, all_iou, all_acc, all_auc, all_sen, all_spe, all_
     print(f'mDice: {all_dice.mean()}')
     print(f'mIoU:  {all_iou.mean()}')
     print(f'mAcc:  {all_acc.mean()}')
+    print(f'mPrecision: {all_precision.mean()}')
     print(f'mAuc:  {all_auc.mean()}')
     print(f'mSens: {all_sen.mean()}')
     print(f'mSpec: {all_spe.mean()}')
@@ -218,24 +222,25 @@ def save_print_score(all_dice, all_iou, all_acc, all_auc, all_sen, all_spe, all_
 #     print(f'mSens: {all_sen.mean()}')
 #     print(f'mSpec: {all_spe.mean()}')
 #     print(f'mBAcc: {all_bacc.mean()}')
-def save_print_score_rose(all_dice, all_iou, all_acc, all_auc, all_sen, all_spe, all_bacc, file, label_names):
+def save_print_score_rose(all_dice, all_iou, all_acc, all_precision, all_auc, all_sen, all_spe, all_bacc, file, label_names):
     all_dice = np.array(all_dice)
     all_iou = np.array(all_iou)
     all_acc = np.array(all_acc)
+    all_precision = np.array(all_precision)
     all_auc = np.array(all_auc)
     all_sen = np.array(all_sen)
     all_spe = np.array(all_spe)
     all_bacc = np.array(all_bacc)
     test_mean = ["mean"]+[all_dice.mean()] + \
                 [all_iou.mean()] + \
-                [all_acc.mean()] + \
+                [all_acc.mean()] + [all_precision.mean()] + \
                 [all_auc.mean()] + \
                 [all_sen.mean()] + \
                 [all_spe.mean()] + \
                 [all_bacc.mean()] 
     test_std = ["std"]+[all_dice.std()] + \
                [all_iou.std()] + \
-               [all_acc.std()] + \
+               [all_acc.std()] + [all_precision.std()] + \
                [all_auc.std()] + \
                [all_sen.std()] + \
                [all_spe.std()] + \
@@ -243,7 +248,7 @@ def save_print_score_rose(all_dice, all_iou, all_acc, all_auc, all_sen, all_spe,
     label_names = label_names[1:]
     title = [' ', 'mDice'] + [name + "_dice" for name in label_names] + \
             ['mIoU'] + [name + "_iou" for name in label_names] + \
-            ['mAcc'] + \
+            ['mAcc'] + ['mPrecision'] + \
             ['mAuc'] + \
             ['mSens'] + [name + "_sen" for name in label_names] + \
             ['mSpec'] + [name + "_spe" for name in label_names] + \
@@ -361,8 +366,8 @@ class cutmix():
         H = size[3]
         """1.论文里的公式2，求出B的rw,rh"""
         cut_rat = np.sqrt(1. - lam)
-        cut_w = np.int(W * cut_rat)
-        cut_h = np.int(H * cut_rat)
+        cut_w = int(W * cut_rat)
+        cut_h = int(H * cut_rat)
 
         # uniform
         """2.论文里的公式2，求出B的rx,ry（bbox的中心点）"""

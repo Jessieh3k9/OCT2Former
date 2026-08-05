@@ -68,7 +68,7 @@ class basic_setting():
             self.val_result_file = os.path.join(self.dir, "val_result.csv")
             with open(self.val_result_file, "a") as f:
                 w = csv.writer(f)
-                w.writerow(['fold', 'epoch', 'mDice', 'mIoU', 'mAcc', 'mAuc', 'mSens', 'mSpec', 'mBAcc'])
+                w.writerow(['fold', 'epoch', 'mDice', 'mIoU', 'mAcc', 'mPrecision', 'mAuc', 'mSens', 'mSpec', 'mBAcc'])
 
             self.log_dir = os.path.join(self.dir, "log")
             os.mkdir(self.log_dir)
@@ -102,11 +102,13 @@ class basic_setting():
             self.test_result_file = os.path.join(self.dir, "test_result.csv")
             with open(self.test_result_file, "w") as f:
                 w = csv.writer(f)
-                title = ['file', 'mDice'] + [name+"_dice" for name in self.label_names[1:]] + \
-                        ['mIoU'] + [name + "_iou" for name in self.label_names[1:]] + \
-                        ['mAcc'] + \
-                        ['mSens'] + [name + "_sens" for name in self.label_names[1:]] + \
-                        ['mSpec'] + [name + "_spec" for name in self.label_names[1:]]
+                label_names = self.label_names[1:] or [f"class_{index}" for index in range(1, self.n_class)]
+                title = ['file', 'mDice'] + [name+"_dice" for name in label_names] + \
+                    ['mIoU'] + [name + "_iou" for name in label_names] + \
+                    ['mAcc', 'mPrecision', 'mAuc', 'mSens'] + \
+                    [name + "_sens" for name in label_names] + \
+                    ['mSpec'] + [name + "_spec" for name in label_names] + \
+                    ['mBACC'] + [name + "_bacc" for name in label_names]
                 w.writerow(title)
             if self.plot:
                 self.plot_save_dir = os.path.join(self.dir, "test_images")
